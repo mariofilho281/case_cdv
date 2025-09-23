@@ -5,73 +5,97 @@ import time
 logging.basicConfig(level=logging.INFO)
 
 
-def fetch_all_data(api_url: str, params: dict, seconds_to_wait: int = 1) -> list:
+class DataFetcher:
     """
-    Fetches all data from a paginated API by handling pagination automatically.
+    A client for fetching paginated data from a REST API endpoint.
 
-    This function makes repeated requests to a paginated API endpoint, collecting
-    all results across multiple pages. It handles pagination by detecting when
-    the API indicates more data is available and adjusting the offset parameter
-    accordingly.
+    This class handles automatic pagination by making sequential requests
+    to an API endpoint until all available data has been retrieved. It
+    maintains state between requests to track progress and manage resources.
 
-    Args:
-        api_url (str): The URL of the API endpoint.
-        params (dict): The initial query parameters for the first request.
-        seconds_to_wait (int, optional): Number of seconds to wait between
-            consecutive requests to avoid rate limiting. Defaults to 1 second.
-
-    Returns:
-        list: A list containing all the fetched results from all pages.
-
-    Raises:
-        requests.exceptions.RequestException: If any network-related error occurs
-            during the API request.
-
-    Notes:
-        - The API is expected to return JSON responses with a 'features' field
-          containing the results and an 'exceededTransferLimit' boolean field
-          indicating whether more pages are available.
-        - Pagination is handled using the 'resultOffset' parameter which is
-          automatically incremented by the number of results fetched per page.
-        - The function includes built-in rate limiting with configurable wait time.
+    Attributes:
+        url (str): The base URL of the API endpoint to fetch data from.
+        session (requests.Session): HTTP session for making requests.
+        finished (bool): Flag indicating whether all pages have been fetched.
+        data (list): Accumulated data from all fetched pages.
     """
-    all_results = []
-    params = params.copy()
-    session = requests.Session()
-    logging.info('Starting data fetch...')
 
-    while True:
+    def __init__(self, url: str):
+        """
+        Initialize the DataFetcher with the target API endpoint.
+
+        Args:
+            url (str): The base URL of the API endpoint to fetch data from.
+                       This should be the full endpoint URL without query parameters.
+        """
+        self.url = url
+        self.session = requests.Session()
+        self.finished = False
+        self.data = []
+
+    def fetch_all_pages(self, params: dict, seconds_between_requests: int = 1):
+        """
+        Fetch all available pages of data from the API endpoint.
+
+        This method performs sequential requests to the API, automatically
+        handling pagination until all data has been retrieved. It accumulates
+        results in the `data` attribute and ensures proper resource cleanup.
+
+        Args:
+            params (dict): Query parameters for the API requests. Should include
+                          any required parameters for the specific endpoint.
+            seconds_to_wait (int, optional): Number of seconds to wait between
+                          consecutive requests to avoid rate limiting. Defaults to 1.
+
+        Notes:
+            - Ensures the HTTP session is closed even if an exception occurs
+        """
         try:
-            logging.info(f'Requesting data with parameters: {params}')
-            response = session.get(api_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            results_on_page = data.get('features', [])
+            while not self.finished:
+                logging.info(f'Requesting data with parameters: {params}')
+                new_data = self.get_page(params)
+                self.data.extend(new_data)
+                logging.info(f'Fetched {len(new_data)} results. '
+                             f'Total so far: {len(self.data)}')
+                time.sleep(seconds_between_requests)
+        finally:
+            self.session.close()
 
-            if not results_on_page:
-                logging.info('No results found on this page.')
-                break
+    def get_page(self, params: dict) -> list:
+        """
+        Fetch a single page of data from the API.
 
-            all_results.extend(results_on_page)
-            logging.info(f'Fetched {len(results_on_page)} results. '
-                         f'Total so far: {len(all_results)}')
+        This method makes a single HTTP request to the API endpoint with
+        the current pagination state. It updates the internal state to
+        track progress and determine when pagination is complete.
 
-            if data.get('exceededTransferLimit'):
-                logging.info('Transfer limit exceeded, '
-                             'preparing for next page...')
-                params['resultOffset'] = (params.get('resultOffset', 0)
-                                          + len(results_on_page))
-                time.sleep(seconds_to_wait)
-            else:
-                logging.info('Last page reached. Finalizing fetch.')
-                break
+        Args:
+            params (dict): Base query parameters for the request. The method
+                          will create a copy of this in order to add/update
+                          the 'resultOffset' parameter.
 
-        except requests.exceptions.RequestException as request_error:
-            logging.error(f'An error occurred: {request_error}')
-            break
+        Returns:
+            list: The data from the current page (from 'features' field).
 
-    logging.info(f'Finished! Total results fetched: {len(all_results)}')
-    return all_results
+        Raises:
+            requests.exceptions.HTTPError: If the HTTP request returns an error status.
+            requests.exceptions.RequestException: For network-related errors.
+
+        Notes:
+            - Automatically increments the 'resultOffset' based on records fetched
+            - Sets the 'finished' flag when 'exceededTransferLimit' is False
+            - Expects the API response to have a 'features' field with the data
+              and an 'exceededTransferLimit' boolean field for pagination control
+        """
+        params = params.copy()
+        params['resultOffset'] = len(self.data)
+        response = self.session.get(self.url, params=params)
+        response.raise_for_status()
+        json_data = response.json()
+        page_data = json_data.get('features', [])
+        if not json_data.get('exceededTransferLimit'):
+            self.finished = True
+        return page_data
 
 
 if __name__ == '__main__':
@@ -79,7 +103,6 @@ if __name__ == '__main__':
            '/arcgis/rest/services/PORTAL/WFS/MapServer/0/query')
     parameters = {'where': '1=1',
                   'outFields': '*',
-                  'f': 'geojson',
-                  'resultOffset': 0,
-                  'resultRecordCount': 1000}
-    results = fetch_all_data(url, parameters)
+                  'f': 'geojson'}
+    fetcher = DataFetcher(url)
+    fetcher.fetch_all_pages(parameters, seconds_between_requests=1)
