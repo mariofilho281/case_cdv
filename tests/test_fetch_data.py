@@ -1,4 +1,4 @@
-from src.fetch_data import DataFetcher
+from scripts.fetch_data import DataFetcher
 
 
 class TestDataFetcher:
