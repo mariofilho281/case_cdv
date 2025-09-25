@@ -14,11 +14,11 @@ where:
     α: Scaling parameter to be fitted
 
 The script performs the following operations:
-1. Loads turbine data from a CSV file containing rotor diameters and power ratings
-2. Fits the quadratic model using linear least squares regression
-3. Calculates the R² coefficient to evaluate model fit
-4. Prints the best-fit parameters and goodness-of-fit statistics
-5. Generates a visualization comparing raw data with the fitted curve
+    1. Loads turbine data from a CSV file containing rotor diameters and power ratings
+    2. Fits the quadratic model using linear least squares regression
+    3. Calculates the R² coefficient to evaluate model fit
+    4. Prints the best-fit parameters and goodness-of-fit statistics
+    5. Generates a visualization comparing raw data with the fitted curve
 
 Usage:
     Simply run the script to fit the model and display results:
@@ -46,7 +46,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    turbine_data = pd.read_csv('outputs/out.csv', index_col='OBJECTID')
+    turbine_data = pd.read_csv('outputs/output.csv', index_col='OBJECTID')
     diameter = turbine_data['DIAM_ROTOR']
     power = turbine_data['POT_MW']
     regressors = np.atleast_2d(diameter**2).T
