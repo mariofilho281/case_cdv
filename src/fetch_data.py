@@ -37,7 +37,7 @@ class DataFetcher:
         self.finished = False
         self.data = []
 
-    def fetch_all_pages(self, seconds_between_requests: int = 1):
+    def fetch_all_pages(self, seconds_between_requests: float = 1.0) -> None:
         """
         Fetch all available pages of data from the API endpoint.
 
