@@ -49,12 +49,14 @@ if __name__ == '__main__':
     turbine_data = pd.read_csv('../outputs/output.csv', index_col='OBJECTID')
     diameter = turbine_data['DIAM_ROTOR']
     power = turbine_data['POT_MW']
+
     regressors = np.atleast_2d(diameter**2).T
     parameters, squared_residuals, _, _ = np.linalg.lstsq(regressors, power)
     r_squared = 1 - (squared_residuals[0] / np.sum((power - power.mean())**2))
     print(f'Best fit:\n'
           f'power = {parameters[0]:.6f} * diameter^2\n'
           f'R² = {r_squared}.')
+
     diameter_fit = np.linspace(0, 225, 40)
     power_fit = parameters[0] * diameter_fit**2
     plt.plot(diameter, power, '.', diameter_fit, power_fit, '--')
